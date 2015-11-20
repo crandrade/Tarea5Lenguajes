@@ -210,7 +210,15 @@
 
 ;; run :: s-expr -> number
 (defun (run prog)
-  (interp (parse prog) empty-env))
+  (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env))
+
+
+(define (make-list lst)
+    (define (make-list-rec lst)
+      (match lst
+        ['() '(Empty)]
+        [(cons a b) (begin (define c (make-list-rec b)) (list 'Cons a c))]))
+    (make-list-rec lst))
 
 ;; Para Sección 3
 ;(defun (run prog)  
