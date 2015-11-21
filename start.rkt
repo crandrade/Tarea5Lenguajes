@@ -44,6 +44,7 @@
   (prim-app name args)  
   (fun id body)
   (lcal defs body)
+  (lazy value)
   (datatype name variants)
   (my-match val cases))
 
@@ -66,6 +67,16 @@
   (litP l)
   (constrP ctr patterns))
 
+
+;; make-list :: list -> s-expr
+;; takes a list and returns 
+(define (make-list lst)
+    (define (make-list-rec lst)
+      (match lst
+        ['() '(Empty)]
+        [(cons a b) (begin (define c (make-list-rec b)) (list 'Cons a c))]))
+    (make-list-rec lst))
+
 ;; parse :: s-expr -> Expr
 (defun (parse s-expr)
   (match s-expr
@@ -73,6 +84,8 @@
     [(? boolean?) (bool s-expr)]
     [(? string?) (my-string s-expr)]
     [(? symbol?) (id s-expr)]    
+    [(list 'list a ...) (parse (make-list a))]
+    [(list 'lazy a) (lazy (parse a))]
     [(list 'if c t f) (my-if (parse c)
                           (parse t)
                           (parse f))]
@@ -114,10 +127,12 @@
 
 ;; interp :: Expr Env -> number/procedure
 (defun (interp expr env)
+  (begin #|(print expr) (print "\n")|#
   (match expr
     [(num n) n]
     [(bool b) b]
     [(my-string s) s]
+    [(lazy a) (λ (a) a)]
     [(my-if c t f)
      (if (interp c env)
          (interp t env)
@@ -150,7 +165,7 @@
                                           (map cdr assocList)
                                           env))
         (interp body new-env)])]
-    ))
+    )))
 
 (defun (interp-def d env)
   (match d
@@ -213,12 +228,7 @@
   (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env))
 
 
-(define (make-list lst)
-    (define (make-list-rec lst)
-      (match lst
-        ['() '(Empty)]
-        [(cons a b) (begin (define c (make-list-rec b)) (list 'Cons a c))]))
-    (make-list-rec lst))
+
 
 ;; Para Sección 3
 ;(defun (run prog)  
