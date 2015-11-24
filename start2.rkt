@@ -56,11 +56,7 @@
   (variant name params))
 
 (deftype Val
-  (numV n)
-  (boolV b)
-  (structV name variant values)
-  (closureV lfun lazyness)
-  (exprV expr env cache))
+  (structV name variant values))
 
 (deftype Case
   (my-case pattern body))
@@ -114,7 +110,7 @@
 ;; parse-variante :: s-expr -> Variant
 (defun (parse-variant v)
   (match v
-    [(list name params ...) (variant name (map parse params))]))
+    [(list name params ...) (variant name params)]))
 
 ;; parse-case :: s-expr -> Expr(my-case)
 (defun (parse-case c)
@@ -131,6 +127,7 @@
 
 ;; interp :: Expr Env -> number/procedure
 (defun (interp expr env)
+  (begin #|(print expr) (print "\n")|#
   (match expr
     [(num n) n]
     [(bool b) b]
@@ -141,25 +138,13 @@
          (interp t env)
          (interp f env))]
     [(id x) (env-lookup x env)]
-    [(fun ids body) 
-     (def id (map (λ (x) (match x
-                           [(list 'lazy y) y]
-                           [_ x])) ids))
-     (def lazyness (map (λ (x) (match x
-                           [(list 'lazy y) #t]
-                           [_ #f])) ids))
-     (closureV (λ (arg-vals) (interp body
-                              (multi-extend-env id arg-vals env))) lazyness)]
+    
+    [(fun ids body) (λ (arg-vals)       
+                      (interp body
+                              (multi-extend-env ids arg-vals env)))]
     
     [(app fun-expr arg-expr-list)
-     #|((interp fun-expr env) (map (λ (a) (interp a env)) arg-expr-list))|#
-     (match (interp fun-expr env)
-     [(closureV f lazyness) 
-       (def args (map (λ (a b) (if b 
-                           a
-                           (interp a env))) arg-expr-list lazyness))
-      (f args)]
-       [_ ((interp fun-expr env) (map (λ (a) (interp a env)) arg-expr-list))])]
+     ((interp fun-expr env) (map (λ (a) (interp a env)) arg-expr-list))]
     
     [(prim-app prim arg-expr-list)
      (apply (cadr (assq prim *primitives*))
@@ -180,7 +165,7 @@
                                           (map cdr assocList)
                                           env))
         (interp body new-env)])]
-    ))
+    )))
 
 (defun (interp-def d env)
   (match d
@@ -195,28 +180,26 @@
 (defun (interp-datatype name env)
   (update-env! env
                (string->symbol (string-append (symbol->string name) "?"))
-               (closureV (λ (v)
+               (λ (v)
                  (match (first v)
-                   [(structV n var _) (symbol=? n name)])) '(#f))))
+                   [(structV n var _) (symbol=? n name)]))))
 
 (defun (interp-variant name var env)  
   ;; name of the variant or dataconstructor
   (def varname (variant-name var))
-  (def varparams (variant-params var))
+  
   ;; variant data constructor
   (update-env! env
                varname
                (λ (args)
-                 (begin (print (structV name varname args))
-                 (structV name varname args))))
+                 (structV name varname args)))
   
   ;; variant predicate
-  (print varparams)
   (update-env! env
                (string->symbol (string-append (symbol->string varname) "?"))
-               (closureV (λ (v)
+               (λ (v)
                  (match (first v)
-                   [(structV _ var _) (symbol=? var varname)])) '(#f))))
+                   [(structV _ var _) (symbol=? var varname)]))))
 
 (defun (find-first-matching-case value cases)
   (match cases
@@ -238,11 +221,13 @@
                      (apply append (map match-pattern-with-value
                                         patterns str-values))
                      #f)]
-                [(x y) (error "Match failure" x "--" y)]))
+                [(x y) (error "Match failure")]))
 
 ;; run :: s-expr -> number
 (defun (run prog)
   (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env))
+
+
 
 
 ;; Para Sección 3

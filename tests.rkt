@@ -57,3 +57,24 @@
                                {case {Cons h t} => {+ 1 {length t}}}}}}}
                 {length {Cons 1 {Cons 2 {Cons 3 {Empty}}}}}})
         3)
+
+
+;; more tests
+;; first class
+(test (run '{with {} {{fun {} 42}}}) 42)
+
+
+;; test divzero
+(test (run '{{fun {x  {lazy y}} x} 1 {/ 1 0}}) 1)
+
+(test/exn (run '{{fun {x  y} x} 1 {/ 1 0}})
+          "/: division by zero")
+
+(test (run '{local {{datatype Foo {Lazy {lazy a }}}
+                {define x  {Lazy {/ 1 0}}}}
+          {Foo? x}}) #t)
+
+(test/regexp (run '{local {{datatype Foo {Lazy {lazy a}}}
+                {define x  {Lazy {/ 1 0}}}}
+          {match x
+            {case {Lazy a} => a}}}) "division by zero")
