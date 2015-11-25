@@ -77,4 +77,4 @@
 (test/regexp (run '{local {{datatype Foo {Lazy {lazy a}}}
                 {define x  {Lazy {/ 1 0}}}}
           {match x
-            {case {Lazy a} => a}}}) "division by zero")
+            {case {Lazy a} => a}}}) "/: division by zero")

@@ -140,7 +140,8 @@
      (if (interp c env)
          (interp t env)
          (interp f env))]
-    [(id x) (env-lookup x env)]
+    [(id x) 
+            (env-lookup x env)]
     [(fun ids body) 
      (def id (map (λ (x) (match x
                            [(list 'lazy y) y]
@@ -159,7 +160,7 @@
                            a
                            (interp a env))) arg-expr-list lazyness))
       (f args)]
-       [_ ((interp fun-expr env) (map (λ (a) (interp a env)) arg-expr-list))])]
+       [_ ((interp fun-expr env) (map (λ (a) a) arg-expr-list))])]
     
     [(prim-app prim arg-expr-list)
      (apply (cadr (assq prim *primitives*))
@@ -207,11 +208,11 @@
   (update-env! env
                varname
                (λ (args)
-                 (begin (print (structV name varname args))
-                 (structV name varname args))))
+                 (begin 
+                   (def vargs (map (λ (x y) (if (lazy? x) y (interp y env))) varparams args))
+                 (structV name varname vargs))))
   
   ;; variant predicate
-  (print varparams)
   (update-env! env
                (string->symbol (string-append (symbol->string varname) "?"))
                (closureV (λ (v)
@@ -242,7 +243,9 @@
 
 ;; run :: s-expr -> number
 (defun (run prog)
-  (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env))
+  (match (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env)
+    [(prim-app a args) (interp (prim-app a args) empty-env)]
+    [x x]))
 
 
 ;; Para Sección 3
@@ -264,7 +267,7 @@ Environment abstract data type
 empty-env   :: Env
 env-lookup  :: Sym Env -> Val
 extend-env  :: Sym Val Env -> Env
-update-env! :: 
+update-env! :: Env Sym Val -> Void
 |#
 (deftype Env
   (mtEnv)
@@ -272,11 +275,13 @@ update-env! ::
 
 (def empty-env  (mtEnv))
 
+;; extend-env :: Sym Expr Env -> Env
 (defun (extend-env id val env)
   (match env
     [(mtEnv) (aEnv (list (cons id val)) empty-env)]
     [(aEnv bindings rest) (aEnv (cons (cons id val) bindings) rest)]))
 
+;; env-lookup :: Sym Env -> Expr
 (defun (env-lookup id env)
   (match env
     [(mtEnv) (error 'env-lookup "no binding for identifier: ~a" id)]
@@ -286,6 +291,7 @@ update-env! ::
          (cdr binding)
          (env-lookup id rest))]))
 
+;; multi-extend-envs :: Sym* Expr* Env -> Env
 (defun (multi-extend-env ids vals env)  
   (match/values (values ids vals)
                 [((list) _) env]
@@ -308,7 +314,7 @@ update-env! ::
     (%       ,(lambda args (apply modulo args)))             
     (odd?    ,(lambda args (apply odd? args)))
     (even?   ,(lambda args (apply even? args)))
-    (/       ,(lambda args (apply / args)))
+    (/       ,(lambda args (if (zero? (cadr args)) (error "/: division by zero") (apply / args))))
     (=       ,(lambda args (apply = args)))
     (<       ,(lambda args (apply < args)))
     (<=      ,(lambda args (apply <= args)))
