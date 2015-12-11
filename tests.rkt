@@ -18,3 +18,20 @@
 (test (run-val '(local ([define x 5])
               (seqn {+ x 1}
                     x))) 5)
+
+
+;-------------------------
+;OTHER TESTS
+;-------------------------
+
+(test (run-val '(local
+             [(define c (class
+                            (field x 1)
+                          (field y 2)
+                          (method sum (z) (+ (get this x) (+ (get this y) z)))
+                          (method set-x (val) (set this x val))))
+              (define o (new c))]
+             (seqn
+              (send o set-x (+ 1 3))
+              (+ (send o sum 3) (get o y)))))
+      11)

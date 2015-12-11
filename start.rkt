@@ -44,7 +44,13 @@
   (unop f s)
   (my-if c tb fb)  
   (seqn expr1 expr2)  
-  (lcal defs body))
+  (lcal defs body)
+  (class fields)
+  (new e)
+  (get e s)
+  (set e s expr)
+  (send e id nexpr)
+  (this))
 
 ;; values
 (deftype Val
@@ -52,7 +58,9 @@
   (boolV b))
 
 (deftype Def
-  (my-def id expr))
+  (my-def id expr)
+  (field id expr)
+  (method id ids expr))
 
 ;-----------------------------------------------------
 
@@ -106,7 +114,7 @@ Este método no crea un nuevo ambiente.
 |#
 (define (extend-frame-env! id val env)
   (match env
-    [(mtEnv) (aEnv (make-hash (list (cons id val)) env))]
+    [(mtEnv) (aEnv (make-hash (list (cons id val))) env)]
     [(aEnv h rEnv) (let* ([l (hash->list h)]
                           [la (cons (cons id val) l)])
                     (set-aEnv-hash! env (make-hash la)))]))
@@ -126,6 +134,13 @@ Este método no crea un nuevo ambiente.
     [(list 'or l r) (binop (λ (i d) (or i d)) (parse l) (parse r))]
     [(list 'and l r) (binop (λ (i d) (and i d)) (parse l) (parse r))]
     [(list 'not b) (unop not (parse b))]
+    [(list 'class fields ...) (class (map parse fields))]
+    [(list 'new c) (new (parse c))]
+    [(list 'send a b c) (send a b (parse c))]
+    [(list 'get e s) (get e s)]
+    [(list 'set e s val) (set e s (parse val))]
+    [(list 'method id args body) (method id args (parse body))]
+    [(list 'field id args) (field id (parse args))]
     [(list 'if c t f) (my-if (parse c)
                              (parse t)
                              (parse f))]
@@ -152,7 +167,8 @@ Este método no crea un nuevo ambiente.
      (if cnd
          (interp t env)
          (interp f env))]
-    [(id x) (env-lookup x env)]        
+    [(id x) (env-lookup x env)]
+    [(class fields) (map (λ (x) (interp-def x env)) fields)]
     [(seqn expr1 expr2) (begin 
                           (interp expr1 env)
                           (interp expr2 env))]
@@ -182,7 +198,10 @@ Este método no crea un nuevo ambiente.
 ;; interp-def :: Def, Env -> Expr
 (define (interp-def a-def env)
   (match a-def
-    [(my-def id body) (cons id (interp body env))]))
+    [(my-def id body) (cons id (interp body env))]
+    [(field id body) (cons id (interp body env))]
+    [(method id args body) 'bla]
+    ))
 
 ;; run :: s-expr -> Val
 (define (run s-expr)
