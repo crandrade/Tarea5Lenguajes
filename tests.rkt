@@ -1,80 +1,20 @@
 #lang play
 (require "start.rkt")
+(print-only-errors)
 
-;basic tests 
-  (test (run '{+ 1 1}) 2)
-  
-  (test (run '{{fun {x y z} {+ x y z}} 1 2 3}) 6)  
-  
-  (test (run '{with {{x 1} {y 2} {f {fun {x y z}
-                                         {+ x y x y}}}}
-                    {f x y x}})
-        6)
-  
-  (test (run '{< 1 2}) #t)
-  
-  (test (run '{local {{define x 1}} x}) 1)
-  
-  (test (run '{with {{x 2} {y {local {{define x 1}} x}}} {+ x x}}) 4)
-  
-  ;; datatypes  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {List? {Empty}}}) #t)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {Empty? {Empty}}}) #t)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {List? {Cons 1 2}}}) #t)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {Cons? {Cons 1 2}}}) #t)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {Empty? {Cons 1 2}}})
-        #f)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {Empty? {Empty}}}) #t)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}} {Cons? {Empty}}})
-        #f)      
-  
-  ;; match
-  (test (run '{match 1 {case 1 => 2}}) 2)
-  
-  (test (run '{match 2
-                {case 1 => 2}
-                {case 2 => 3}})             
-        3)
-  
-  (test (run '{match #t {case #t => 2}}) 2)
-  
-  (test (run '{match #f
-                {case #t => 2}
-                {case #f => 3}})             
-        3)
-  
-  (test (run '{local {{datatype List {Empty} {Cons a b}}
-                      {define length
-                        {fun {l}
-                             {match l
-                               {case {Empty}    => 0}
-                               {case {Cons h t} => {+ 1 {length t}}}}}}}
-                {length {Cons 1 {Cons 2 {Cons 3 {Empty}}}}}})
-        3)
+;-----------------------------------------------------------
+;BASIC TEST
+;-----------------------------------------------------------
 
-
-;; more tests
-;; first class
-(test (run '{with {} {{fun {} 42}}}) 42)
-
-
-;; test divzero
-(test (run '{{fun {x  {lazy y}} x} 1 {/ 1 0}}) 1)
-
-(test/exn (run '{{fun {x  y} x} 1 {/ 1 0}})
-          "/: division by zero")
-
-(test (run '{local {{datatype Foo {Lazy {lazy a }}}
-                {define x  {Lazy {/ 1 0}}}}
-          {Foo? x}}) #t)
-
-(test/regexp (run '{local {{datatype Foo {Lazy {lazy a}}}
-                {define x  {Lazy {/ 1 0}}}}
-          {match x
-            {case {Lazy a} => a}}}) "/: division by zero")
+(test (run-val '(+ 1 2)) 3)
+(test (run-val '(< 1 2)) #t)
+(test (run-val '(- 2 1)) 1)
+(test (run-val '(* 2 3)) 6)
+(test (run-val '(= (+ 2 1) (- 4 1))) #t)
+(test (run-val '(and #t #f)) #f)
+(test (run-val '(or #t #f)) #t)
+(test (run-val '(not (not #t))) #t)
+(test (run-val '(if (not #f) (+ 2 1) 4)) 3)
+(test (run-val '(local ([define x 5])
+              (seqn {+ x 1}
+                    x))) 5)

@@ -2,326 +2,199 @@
 
 #|
 <expr> ::= <num>
-         | <bool>
          | <id>
-         | <string>
-         | {if <expr> <expr> <expr>}
-         | {with {{<id> <expr>}+ } <expr>}
-         | {fun {<id>*}}  <expr>}
-         | {<expr> <expr>*}
-         | {local {<def>*} <expr>}         
-         | {match <expr> <case>+}
-
-<case> ::= {'case <pattern> '=> <expr>}
-<pattern> ::= <num>
          | <bool>
-         | <string>
-         | <id>
-         | (<constr-id> <attr-id>*)
+         | (if <expr> <expr> <expr>)
+         | (+ <expr> <expr>)
+         | '< <s-expr> <s-expr>)
+         | (* <s-expr> <s-expr>)
+         | (= <s-expr> <s-expr>)
+         | (- <s-expr> <s-expr>)
+         | (and <s-expr> <s-expr>)
+         | (or <s-expr> <s-expr>)
+         | (not <s-expr> <s-expr>)         
+         | (seqn <expr> <expr>)
+         | (local { <def> ...} <expr>)
 
-<def>  ::= {define <id> <expr>}
-         | {datatype <typename> <type-constructor>*}}
+<def>    ::= (define <id> <expr>)
 
 
-<type-constructor> ::= {<id> <member>*}
-<constr-id> :: = <id>
-<attr-id> :: = <id>
-<typename> :: = <id>
-<member>   :: = <id>
+;EXTENSION PARA CLASE Y OBJETOS
+<expr>  ::= ... (todo lo anterior)        
+         | (class <expr> <member> ...)
+         | (class <expr> <: <expr> <member> ...)
+         | (new <expr>)
+         | this
+         | (super id <expr> ...)
+         | (set <expr> <id> <expr>)
+         | (get <expr> <id>)
+         | (send <expr> <id> <expr> ...)
+
+<member> ::= 
+        | (field <id> <s-expr>)
+        | (method <id> (list <id> ...) <s-expr>)
 
 |#
-
-
 
 (deftype Expr
   (num n)
   (bool b)
-  (my-string s)
-  (my-if c t f)
-  (id s)
-  (app fun-expr arg-expr-list)
-  ;nodo para aplicación de primitivas
-  (prim-app name args)  
-  (fun id body)
-  (lcal defs body)
-  (lazy value)
-  (datatype name variants)
-  (my-match val cases))
+  (id s)   
+  (binop f l r)
+  (unop f s)
+  (my-if c tb fb)  
+  (seqn expr1 expr2)  
+  (lcal defs body))
 
-;AST for {define <id> <expr>}
-(deftype Def
-  (mydef name val-expr))
-
-(deftype Variant
-  (variant name params))
-
+;; values
 (deftype Val
   (numV n)
-  (boolV b)
-  (structV name variant values)
-  (closureV lfun lazyness)
-  (exprV expr env cache))
+  (boolV b))
 
-(deftype Case
-  (my-case pattern body))
+(deftype Def
+  (my-def id expr))
 
-(deftype Pattern
-  (nilP)
-  (idP id)
-  (litP l)
-  (constrP ctr patterns))
-
-
-;; make-list :: list -> s-expr
-;; takes a list and returns 
-(define (make-list lst)
-    (define (make-list-rec lst)
-      (match lst
-        ['() '(Empty)]
-        [(cons a b) (begin (define c (make-list-rec b)) (list 'Cons a c))]))
-    (make-list-rec lst))
-
-;; parse :: s-expr -> Expr
-(defun (parse s-expr)
-  (match s-expr
-    [(? number?) (num s-expr)]
-    [(? boolean?) (bool s-expr)]
-    [(? string?) (my-string s-expr)]
-    [(? symbol?) (id s-expr)]    
-    [(list 'list a ...) (parse (make-list a))]
-    [(list 'lazy a) (lazy (parse a))]
-    [(list 'if c t f) (my-if (parse c)
-                          (parse t)
-                          (parse f))]
-    [(list 'fun (list x ...) b) (fun x (parse b))]    
-    [(list 'with (list (list x e) ...) b)
-     (app (fun x (parse b)) (map parse e))]
-    [(list 'local (list defs ...) body)
-     (lcal (map parse-def defs) (parse body))]    
-    [(list 'match val-expr cases ...)
-     (my-match (parse val-expr) (map parse-case cases))]
-    [(list f a ...)
-     (if (assq f *primitives*)     
-         (prim-app f (map parse a))
-         (app (parse f) (map parse a)))]))
-
-;; parse-def:: s-expr -> mydef/datatype
-(defun (parse-def s-expr)  
-  (match s-expr
-    [(list 'define id val-expr) (mydef id (parse val-expr))]
-    [(list 'datatype name variants ...) (datatype name (map parse-variant variants))]))
-
-;; parse-variante :: s-expr -> Variant
-(defun (parse-variant v)
-  (match v
-    [(list name params ...) (variant name (map parse params))]))
-
-;; parse-case :: s-expr -> Expr(my-case)
-(defun (parse-case c)
-  (match c
-    [(list 'case pattern => body) (my-case (parse-pattern pattern) (parse body))]))
-
-;; parse-pattern :: s-expr -> Pattern
-(defun (parse-pattern p)  
-  (match p
-    [(? symbol?)  (idP p)]
-    [(? number?)  (litP (num p))]
-    [(? boolean?) (litP (bool p))]        
-    [(list ctr patterns ...) (constrP (first p) (map parse-pattern patterns))]))
-
-;; interp :: Expr Env -> number/procedure
-(defun (interp expr env)
-  (match expr
-    [(num n) n]
-    [(bool b) b]
-    [(my-string s) s]
-    [(lazy a)  a]
-    [(my-if c t f)
-     (if (interp c env)
-         (interp t env)
-         (interp f env))]
-    [(id x) 
-            (env-lookup x env)]
-    [(fun ids body) 
-     (def id (map (λ (x) (match x
-                           [(list 'lazy y) y]
-                           [_ x])) ids))
-     (def lazyness (map (λ (x) (match x
-                           [(list 'lazy y) #t]
-                           [_ #f])) ids))
-     (closureV (λ (arg-vals) (interp body
-                              (multi-extend-env id arg-vals env))) lazyness)]
-    
-    [(app fun-expr arg-expr-list)
-     #|((interp fun-expr env) (map (λ (a) (interp a env)) arg-expr-list))|#
-     (match (interp fun-expr env)
-     [(closureV f lazyness) 
-       (def args (map (λ (a b) (if b 
-                           a
-                           (interp a env))) arg-expr-list lazyness))
-      (f args)]
-       [_ ((interp fun-expr env) (map (λ (a) a) arg-expr-list))])]
-    
-    [(prim-app prim arg-expr-list)
-     (apply (cadr (assq prim *primitives*))
-            (map (λ (a) (interp a env)) arg-expr-list))]
-    
-    [(lcal defs body)
-     (def new-env (aEnv '() env))            
-     (for-each (λ (d) (interp-def d new-env)) defs) 
-     (interp body new-env)]
-    
-    [(my-match expr cases)
-     (def value-matched (interp expr env))
-     (def result (find-first-matching-case value-matched cases))
-     (match result
-       [#f (error "Error")]
-       [(cons assocList body)        
-        (define new-env (multi-extend-env (map car assocList)
-                                          (map cdr assocList)
-                                          env))
-        (interp body new-env)])]
-    ))
-
-(defun (interp-def d env)
-  (match d
-    [(mydef id val-expr)
-     (update-env! env id (interp val-expr env))]
-    [(datatype name variants)
-     ;; extend environment with new definitions corresponding to the datatype
-     ;; it has no return value          
-     (interp-datatype name env)
-     (for-each (λ (v) (interp-variant name v env)) variants)]))
-
-(defun (interp-datatype name env)
-  (update-env! env
-               (string->symbol (string-append (symbol->string name) "?"))
-               (closureV (λ (v)
-                 (match (first v)
-                   [(structV n var _) (symbol=? n name)])) '(#f))))
-
-(defun (interp-variant name var env)  
-  ;; name of the variant or dataconstructor
-  (def varname (variant-name var))
-  (def varparams (variant-params var))
-  ;; variant data constructor
-  (update-env! env
-               varname
-               (λ (args)
-                 (begin 
-                   (def vargs (map (λ (x y) (if (lazy? x) y (interp y env))) varparams args))
-                 (structV name varname vargs))))
-  
-  ;; variant predicate
-  (update-env! env
-               (string->symbol (string-append (symbol->string varname) "?"))
-               (closureV (λ (v)
-                 (match (first v)
-                   [(structV _ var _) (symbol=? var varname)])) '(#f))))
-
-(defun (find-first-matching-case value cases)
-  (match cases
-    [(list) #f]
-    [(cons (my-case pattern body) cs)
-     (match (match-pattern-with-value pattern value)
-       [#f (find-first-matching-case value cs)]
-       [assocList (cons assocList body)])]))
-
-(defun (match-pattern-with-value pattern value)
-  (match/values (values pattern value)
-                [((idP i) v) (list (cons i v))]
-                [((litP (bool v)) b)
-                 (if (equal? v b) (list) #f)]
-                [((litP (num v)) n)
-                 (if (equal? v n) (list) #f)]
-                [((constrP ctr patterns) (structV _ ctr-name str-values))
-                 (if (symbol=? ctr ctr-name)
-                     (apply append (map match-pattern-with-value
-                                        patterns str-values))
-                     #f)]
-                [(x y) (error "Match failure" x "--" y)]))
-
-;; run :: s-expr -> number
-(defun (run prog)
-  (match (interp (parse (list 'local (list '{datatype List {Empty} {Cons a b}}) prog)) empty-env)
-    [(prim-app a args) (interp (prim-app a args) empty-env)]
-    [x x]))
-
-
-;; Para Sección 3
-;(defun (run prog)  
-;  (print-list (interp (parse prog) empty-env)))
-;
-;(defun (print-list e)
-;  (match e
-;    [(structV 'List Empty (list)) '()]
-;    [(structV 'List Cons (list h t)) (cons h (print-list t))]
-;    [else e]))
-
+;-----------------------------------------------------
 
 
 #|-----------------------------
 Environment abstract data type
-(updated with recursive case)
  
-empty-env   :: Env
-env-lookup  :: Sym Env -> Val
-extend-env  :: Sym Val Env -> Env
-update-env! :: Env Sym Val -> Void
+empty-env        :: Env
+env-lookup       :: Sym Env -> Val
+multi-extend-env :: List<Sym> List<Val> Env -> Env
+extend-frame-env! :: Sym Val Env -> Env 
+
+
+ 
+representation BNF:
+<env> ::= (mtEnv)
+        | (aEnv <id> <val> <env>)
 |#
+
 (deftype Env
   (mtEnv)
-  (aEnv bindings rest))
+  (aEnv hash env)) 
 
-(def empty-env  (mtEnv))
+(def empty-env (mtEnv))
 
-;; extend-env :: Sym Expr Env -> Env
-(defun (extend-env id val env)
+#|
+env-lookup:: Sym Env -> Val
+Busca un símbol en el ambiente retornando su valor asociado
+|#
+(define (env-lookup x env)
   (match env
-    [(mtEnv) (aEnv (list (cons id val)) empty-env)]
-    [(aEnv bindings rest) (aEnv (cons (cons id val) bindings) rest)]))
+    [(mtEnv) (error 'env-lookup "free identifier: ~a" x)]
+    [(aEnv hash rest)
+     (if (hash-has-key? hash x)
+         (hash-ref hash x)
+         (env-lookup x rest))]))
 
-;; env-lookup :: Sym Env -> Expr
-(defun (env-lookup id env)
+#|
+multi-extend-env:: List(Sym) List(Expr) Env -> Env
+Crea un nuevo ambiente asociandos los símbolos a sus valores
+|#
+(define (multi-extend-env ids exprs env)
+  (if (= (length ids) (length exprs))
+      (aEnv (make-hash (map cons ids exprs)) env)
+      (error "wrong_input, mismatched lengths")))
+
+#|
+extend-frame-env!:: Sym Val Env -> Void
+Adiciona un nuevo par (Sym, Val) al frame del ambiente usando mutación.
+Este método no crea un nuevo ambiente.
+|#
+(define (extend-frame-env! id val env)
   (match env
-    [(mtEnv) (error 'env-lookup "no binding for identifier: ~a" id)]
-    [(aEnv bindings rest)
-     (def binding (assoc id bindings))
-     (if binding
-         (cdr binding)
-         (env-lookup id rest))]))
+    [(mtEnv) (aEnv (make-hash (list (cons id val)) env))]
+    [(aEnv h rEnv) (let* ([l (hash->list h)]
+                          [la (cons (cons id val) l)])
+                    (set-aEnv-hash! env (make-hash la)))]))
+;-----------------------------------------------------
 
-;; multi-extend-envs :: Sym* Expr* Env -> Env
-(defun (multi-extend-env ids vals env)  
-  (match/values (values ids vals)
-                [((list) _) env]
-                [(_ (list)) env]
-                [((cons id ids) (cons val vals))
-                 (multi-extend-env ids vals (extend-env id val env))]))
+;; parse :: s-expr -> Expr
+(define (parse s-expr)
+  (match s-expr
+    [(? number?) (num s-expr)]
+    [(? symbol?) (id s-expr)]    
+    [(? boolean?) (bool s-expr)]
+    [(list '* l r) (binop * (parse l) (parse r))]
+    [(list '+ l r) (binop + (parse l) (parse r))]
+    [(list '- l r) (binop - (parse l) (parse r))]
+    [(list '< l r) (binop < (parse l) (parse r))]
+    [(list '= l r) (binop = (parse l) (parse r))]    
+    [(list 'or l r) (binop (λ (i d) (or i d)) (parse l) (parse r))]
+    [(list 'and l r) (binop (λ (i d) (and i d)) (parse l) (parse r))]
+    [(list 'not b) (unop not (parse b))]
+    [(list 'if c t f) (my-if (parse c)
+                             (parse t)
+                             (parse f))]
+    [(list 'seqn e1 e2) (seqn (parse e1) (parse e2))]    
+    [(list 'local (list e ...)  b)
+     (lcal (map parse-def e) (parse b))]
+    ))
 
-;; update-env! :: Env Sym Val -> Void
-;; imperative update of env, adding/overring the binding for id.
-(defun (update-env! env id val)
-  (set-aEnv-bindings! env (cons (cons id val) (aEnv-bindings env))))
 
-;;;;;;;
+;; parse-def :: s-expr -> Def
+(define (parse-def s-expr)
+  (match s-expr
+    [(list 'define id b) (my-def id (parse b))]))
 
-;;; primitives
-(define *primitives*
-  `((+       ,(lambda args (apply + args)))
-    (-       ,(lambda args (apply - args)))
-    (*       ,(lambda args (apply * args)))
-    (%       ,(lambda args (apply modulo args)))             
-    (odd?    ,(lambda args (apply odd? args)))
-    (even?   ,(lambda args (apply even? args)))
-    (/       ,(lambda args (if (zero? (cadr args)) (error "/: division by zero") (apply / args))))
-    (=       ,(lambda args (apply = args)))
-    (<       ,(lambda args (apply < args)))
-    (<=      ,(lambda args (apply <= args)))
-    (>       ,(lambda args (apply > args)))
-    (>=      ,(lambda args (apply >= args)))
-    (zero?   ,(lambda args (apply zero? args)))
-    (not     ,(lambda args (apply not args)))
-    (and     ,(lambda args (apply (lambda (x y) (and x y)) args)))
-    (or      ,(lambda args (apply (lambda (x y) (or x y)) args)))))
+;; interp :: Expr Env -> Val
+(define (interp expr env)
+  (match expr
+    [(num n) (numV n)]    
+    [(bool b) (boolV b)]    
+    [(binop f l r) (make-val (f (open-val (interp l env)) (open-val (interp r env))))]
+    [(unop f s) (make-val (f (open-val (interp s env))))]
+    [(my-if c t f)
+     (def (boolV cnd) (interp c env))
+     (if cnd
+         (interp t env)
+         (interp f env))]
+    [(id x) (env-lookup x env)]        
+    [(seqn expr1 expr2) (begin 
+                          (interp expr1 env)
+                          (interp expr2 env))]
+    [(lcal defs body)
+     (let* ([new-env (multi-extend-env '() '() env)])
+           (for-each (λ(x)
+                       (let ([in-def (interp-def x new-env)])
+                         (extend-frame-env! (car in-def) (cdr in-def) new-env)
+                         #t)) defs)       
+       (interp body new-env))     
+     ]))
 
+;; open-val :: Val -> Scheme Value
+(define (open-val v)
+  (match v
+    [(numV n) n]
+    [(boolV b) b]
+    ))
+
+;; make-val :: Scheme Value -> Val
+(define (make-val v)
+  (match v
+    [(? number?) (numV v)]
+    [(? boolean?) (boolV v)]
+    ))
+
+;; interp-def :: Def, Env -> Expr
+(define (interp-def a-def env)
+  (match a-def
+    [(my-def id body) (cons id (interp body env))]))
+
+;; run :: s-expr -> Val
+(define (run s-expr)
+  (interp (parse s-expr) empty-env))
+
+#|
+run-val:: s-expr -> Scheme-Val + Val
+A run version that returns scheme values for primitive values and mini-scheme values for classes and objects
+|#
+(define (run-val s-expr)
+  (define val (interp (parse s-expr) empty-env))
+  (match val
+    [(numV n) n]
+    [(boolV b) b]
+    [x x]))
