@@ -35,3 +35,50 @@
               (send o set-x (+ 1 3))
               (+ (send o sum 3) (get o y)))))
       11)
+
+(test (run-val '(local
+              [(define A
+                 (class
+                     (method apply (c)
+                             (send (new c) m))))
+               (define ins (new A))]
+              (send ins apply (class
+                                (field x 2) 
+                                (method m () (get this x))))))
+                                2)
+
+(test (run-val '(local
+              [(define c1 (class
+                              (method f (z) (< z 7))))
+               (define c (class <: c1))
+               (define o (new c))]
+              (send o f 20)))
+              #f)
+
+(test (run-val '(local
+          [(define c2 (class
+                          (method h (x) (+ x 1))))
+           (define c1 (class <: c2
+                        (method f () #f)))
+           (define c (class <: c1                       
+                       (method g () (super h 10))))
+           (define o (new c))]
+          (send o g)))
+          11)
+
+(test (run-val '(local
+              [(define A (class 
+                           [field x 1]
+                           [field y 0]
+                           [method ax () (get this x)]))
+               (define B (class <: A
+                           [field x 2]
+                           [method bx () (get this x)]))
+               (define b (new B))]
+              (send b ax)))
+              1)
+
+(test (run-val '(local
+              [(define f (fun (x)
+                              (+ x x)))]
+              (f 5))) 10)

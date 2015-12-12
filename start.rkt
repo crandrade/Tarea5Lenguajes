@@ -45,7 +45,7 @@
   (my-if c tb fb)  
   (seqn expr1 expr2)  
   (lcal defs body)
-  (class fields)
+  (class father methods fields)
   (new e)
   (get e s)
   (set e s expr)
@@ -55,12 +55,15 @@
 ;; values
 (deftype Val
   (numV n)
-  (boolV b))
+  (boolV b)
+  (classV fields methods env))
 
 (deftype Def
   (my-def id expr)
   (field id expr)
-  (method id ids expr))
+  (method fun)
+  (father id)
+  (Object))
 
 ;-----------------------------------------------------
 
@@ -134,7 +137,10 @@ Este método no crea un nuevo ambiente.
     [(list 'or l r) (binop (λ (i d) (or i d)) (parse l) (parse r))]
     [(list 'and l r) (binop (λ (i d) (and i d)) (parse l) (parse r))]
     [(list 'not b) (unop not (parse b))]
-    [(list 'class fields ...) (class (map parse fields))]
+    [(list 'class '<: cname cargs ...)
+      (class (father (parse cname)) (map parse-def (filter (λ (x) (symbol=? 'field (car x))) cargs)) (map parse-def (filter (λ (y) (symbol=? 'method (car y))) cargs)))]
+    [(list 'class cargs ...) 
+      (class (father (Object)) (map parse-def (filter (λ (x) (symbol=? 'field (car x))) cargs)) (map parse-def (filter (λ (y) (symbol=? 'method (car y))) cargs)))]
     [(list 'new c) (new (parse c))]
     [(list 'send a b c) (send a b (parse c))]
     [(list 'get e s) (get e s)]
@@ -153,7 +159,9 @@ Este método no crea un nuevo ambiente.
 ;; parse-def :: s-expr -> Def
 (define (parse-def s-expr)
   (match s-expr
-    [(list 'define id b) (my-def id (parse b))]))
+    [(list 'define id b) (my-def id (parse b))]
+    [(list 'field fname init) (field fname (parse init))]
+    [(list 'method mname args body) (method (lambda args (parse body)))]))
 
 ;; interp :: Expr Env -> Val
 (define (interp expr env)
@@ -168,7 +176,10 @@ Este método no crea un nuevo ambiente.
          (interp t env)
          (interp f env))]
     [(id x) (env-lookup x env)]
-    [(class fields) (map (λ (x) (interp-def x env)) fields)]
+    [(new c) (env-lookup c env)]
+    [(class father fields methods) 
+     (define (classV fields methods env) (env-lookup (father-id father) env))
+     (map (λ (x) (interp-def x env)) fields)]
     [(seqn expr1 expr2) (begin 
                           (interp expr1 env)
                           (interp expr2 env))]
@@ -200,7 +211,7 @@ Este método no crea un nuevo ambiente.
   (match a-def
     [(my-def id body) (cons id (interp body env))]
     [(field id body) (cons id (interp body env))]
-    [(method id args body) 'bla]
+    [(method fun) fun]
     ))
 
 ;; run :: s-expr -> Val
@@ -217,3 +228,7 @@ A run version that returns scheme values for primitive values and mini-scheme va
     [(numV n) n]
     [(boolV b) b]
     [x x]))
+
+
+
+;; this es dinámico
